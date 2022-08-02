@@ -83,13 +83,9 @@ class WrappedStreamingBody(object):
                 retval = self.size
             else:
                 raise Exception("Unsupported")
-        else:
-            if whence == 1:
-                offset = self.pos + offset
-                if offset > self.size:
-                    retval = self.size
-                else:
-                    retval = offset
+        elif whence == 1:
+            offset = self.pos + offset
+            retval = self.size if offset > self.size else offset
         # print("In seek(%s, %s): %s, size is %s" % (offset, whence, retval, self.size))
 
         self.pos = retval
@@ -122,18 +118,16 @@ def sdb_to_dict(item):
 
 def bytes_to_b64str(byte_data):
     byte_data_64 = base64.b64encode(byte_data)
-    byte_data_64_ascii = byte_data_64.decode('ascii')
-    return byte_data_64_ascii
+    return byte_data_64.decode('ascii')
 
 
 def b64str_to_bytes(str_data):
     str_ascii = str_data.encode('ascii')
-    byte_data = base64.b64decode(str_ascii)
-    return byte_data
+    return base64.b64decode(str_ascii)
 
 def split_s3_url(s3_url):
     if s3_url[:5] != "s3://":
-        raise ValueError("URL {} is not valid".format(s3_url))
+        raise ValueError(f"URL {s3_url} is not valid")
 
 
     splits = s3_url[5:].split("/")

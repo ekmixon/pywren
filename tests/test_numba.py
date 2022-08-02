@@ -25,31 +25,31 @@ import unittest
 
 def foo(N):
     x = 0.0
-    for i in range(N):
+    for _ in range(N):
         x += 1.0
-        x = x * 3.0
+        x *= 3.0
     return x
 
 @jit
 def bar(N):
     x = 0.0
-    for i in range(N):
+    for _ in range(N):
         x += 1.0
-        x = x * 3.0
+        x *= 3.0
     return x
 
 
 # Time isn't supported in numba so we have to wrap
 def time_foo(N):
     t1 = time.time()
-    for i in range(5):
+    for _ in range(5):
         foo(N)
     t2 = time.time()
     return t2-t1
 
 def time_bar(N):
     t1 = time.time()
-    for i in range(5):
+    for _ in range(5):
         bar(N)
     t2 = time.time()
     return t2-t1

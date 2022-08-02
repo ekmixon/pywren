@@ -469,7 +469,7 @@ class Futures(unittest.TestCase):
         """
         Check if done works correctly
         """
-        
+
         def sum_except(x):
             s = np.sum(x)
             if s >= 1:
@@ -480,7 +480,7 @@ class Futures(unittest.TestCase):
         fut = self.wrenexec.call_async(sum_except, x)
         while not fut.done():
             time.sleep(1)
-            
+
         x = np.zeros(10) + 17
         fut = self.wrenexec.call_async(sum_except, x)
         while not fut.done():

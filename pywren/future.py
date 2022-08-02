@@ -136,9 +136,8 @@ class ResponseFuture:
         if self._state == JobState.new:
             raise ValueError("job not yet invoked")
 
-        if check_only:
-            if self._state == JobState.success or self._state == JobState.error:
-                return True
+        if check_only and self._state in [JobState.success, JobState.error]:
+            return True
 
         if self._state == JobState.success:
             return self._return_val
@@ -165,11 +164,7 @@ class ResponseFuture:
             raise NotImplementedError()
 
         if check_only:
-            if call_status is None:
-                return False
-            else:
-                return True
-
+            return call_status is not None
         while call_status is None:
             time.sleep(self.GET_RESULT_SLEEP_SECS)
             call_status = storage_handler.get_call_status(self.callset_id, self.call_id)
@@ -188,9 +183,13 @@ class ResponseFuture:
             exception_args = call_status['exception_args']
             if exception_args[0] == "WRONGVERSION":
                 if throw_except:
-                    raise Exception("Pywren version mismatch: remote " + \
-                        "expected version {}, local library is version {}".format(
-                            exception_args[2], exception_args[3]))
+                    raise Exception(
+                        (
+                            "Pywren version mismatch: remote "
+                            + f"expected version {exception_args[2]}, local library is version {exception_args[3]}"
+                        )
+                    )
+
                 return None
             elif exception_args[0] == "OUTATIME":
                 if throw_except:
@@ -221,9 +220,10 @@ class ResponseFuture:
 
         self._invoke_metadata['download_output_timestamp'] = call_output_time_done
         call_success = call_invoker_result['success']
-        logger.info("ResponseFuture.result() {} {} call_success {}".format(self.callset_id,
-                                                                           self.call_id,
-                                                                           call_success))
+        logger.info(
+            f"ResponseFuture.result() {self.callset_id} {self.call_id} call_success {call_success}"
+        )
+
 
 
 
@@ -241,22 +241,22 @@ class ResponseFuture:
                                call_invoker_result['exc_value'],
                                call_invoker_result['exc_traceback'])
 
-            if throw_except:
-
-                if call_invoker_result.get('pickle_fail', False):
-                    logging.warning(
-                        "there was an error pickling. The original exception: " + \
-                            "{}\nThe pickling exception: {}".format(
-                                call_invoker_result['exc_value'],
-                                str(call_invoker_result['pickle_exception'])))
-
-                    reraise(Exception, call_invoker_result['exc_value'],
-                            call_invoker_result['exc_traceback'])
-                else:
-                    # reraise the exception
-                    reraise(*self._traceback)
-            else:
+            if not throw_except:
                 return None  # nothing, don't raise, no value
+            if call_invoker_result.get('pickle_fail', False):
+                logging.warning(
+                    (
+                        "there was an error pickling. The original exception: "
+                        + f"{call_invoker_result['exc_value']}\nThe pickling exception: {str(call_invoker_result['pickle_exception'])}"
+                    )
+                )
+
+
+                reraise(Exception, call_invoker_result['exc_value'],
+                        call_invoker_result['exc_traceback'])
+            else:
+                # reraise the exception
+                reraise(*self._traceback)
 
     def exception(self, timeout=None):
         raise NotImplementedError()

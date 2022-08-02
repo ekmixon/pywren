@@ -106,25 +106,8 @@ def _make_cell_set_template_code():
     # NOTE: we are marking the cell variable as a free variable intentionally
     # so that we simulate an inner function instead of the outer function. This
     # is what gives us the ``nonlocal`` behavior in a Python 2 compatible way.
-    if not PY3:
-        return types.CodeType(
-            co.co_argcount,
-            co.co_nlocals,
-            co.co_stacksize,
-            co.co_flags,
-            co.co_code,
-            co.co_consts,
-            co.co_names,
-            co.co_varnames,
-            co.co_filename,
-            co.co_name,
-            co.co_firstlineno,
-            co.co_lnotab,
-            co.co_cellvars,  # this is the trickery
-            (),
-        )
-    else:
-        return types.CodeType(
+    return (
+        types.CodeType(
             co.co_argcount,
             co.co_kwonlyargcount,
             co.co_nlocals,
@@ -141,6 +124,24 @@ def _make_cell_set_template_code():
             co.co_cellvars,  # this is the trickery
             (),
         )
+        if PY3
+        else types.CodeType(
+            co.co_argcount,
+            co.co_nlocals,
+            co.co_stacksize,
+            co.co_flags,
+            co.co_code,
+            co.co_consts,
+            co.co_names,
+            co.co_varnames,
+            co.co_filename,
+            co.co_name,
+            co.co_firstlineno,
+            co.co_lnotab,
+            co.co_cellvars,  # this is the trickery
+            (),
+        )
+    )
 
 
 _cell_set_template_code = _make_cell_set_template_code()
@@ -171,10 +172,9 @@ def islambda(func):
     return getattr(func,'__name__') == '<lambda>'
 
 
-_BUILTIN_TYPE_NAMES = {}
-for k, v in types.__dict__.items():
-    if type(v) is type:
-        _BUILTIN_TYPE_NAMES[v] = k
+_BUILTIN_TYPE_NAMES = {
+    v: k for k, v in types.__dict__.items() if type(v) is type
+}
 
 
 def _builtin_type(name):
@@ -199,10 +199,8 @@ if sys.version_info < (3, 4):
             i += 1
             if op >= HAVE_ARGUMENT:
                 oparg = code[i] + code[i + 1] * 256 + extended_arg
-                extended_arg = 0
                 i += 2
-                if op == EXTENDED_ARG:
-                    extended_arg = oparg * 65536
+                extended_arg = oparg * 65536 if op == EXTENDED_ARG else 0
                 if op in GLOBAL_OPS:
                     yield op, oparg
 
@@ -251,7 +249,7 @@ class CloudPickler(Pickler):
         dispatch[buffer] = save_buffer
 
     def save_unsupported(self, obj):
-        raise pickle.PicklingError("Cannot pickle objects of type %s" % type(obj))
+        raise pickle.PicklingError(f"Cannot pickle objects of type {type(obj)}")
     dispatch[types.GeneratorType] = save_unsupported
 
     # itertools objects do not pickle!
@@ -340,16 +338,17 @@ class CloudPickler(Pickler):
         # So we pickle them here using save_reduce; have to do it differently
         # for different python versions.
         if not hasattr(obj, '__code__'):
-            if PY3:
-                if sys.version_info < (3, 4):
-                    raise pickle.PicklingError("Can't pickle %r" % obj)
-                else:
-                    rv = obj.__reduce_ex__(self.proto)
+            if (
+                PY3
+                and sys.version_info < (3, 4)
+                or not PY3
+                and not hasattr(obj, '__self__')
+            ):
+                raise pickle.PicklingError("Can't pickle %r" % obj)
+            elif PY3:
+                rv = obj.__reduce_ex__(self.proto)
             else:
-                if hasattr(obj, '__self__'):
-                    rv = (getattr, (obj.__self__, name))
-                else:
-                    raise pickle.PicklingError("Can't pickle %r" % obj)
+                rv = (getattr, (obj.__self__, name))
             return Pickler.save_reduce(self, obj=obj, *rv)
 
         # if func is lambda, def'ed at prompt, is in main, or is nested, then
@@ -388,7 +387,7 @@ class CloudPickler(Pickler):
         for x in top_level_dependencies:
             if isinstance(x, types.ModuleType) and hasattr(x, '__package__') and x.__package__:
                 # check if the package has any currently loaded sub-imports
-                prefix = x.__name__ + '.'
+                prefix = f'{x.__name__}.'
                 for name, module in sys.modules.items():
                     # Older versions of pytest will add a "None" module to sys.modules.
                     if name is not None and name.startswith(prefix):
@@ -414,9 +413,7 @@ class CloudPickler(Pickler):
             clsdict.pop('__dict__', None)
             clsdict.pop('__weakref__', None)
 
-        # hack as __new__ is stored differently in the __dict__
-        new_override = clsdict.get('__new__', None)
-        if new_override:
+        if new_override := clsdict.get('__new__', None):
             clsdict['__new__'] = obj.__new__
 
         save = self.save
@@ -532,8 +529,7 @@ class CloudPickler(Pickler):
                 # PyPy "builtin-code" object
                 out_names = set()
             else:
-                out_names = set(names[oparg]
-                                for op, oparg in _walk_global_ops(co))
+                out_names = {names[oparg] for op, oparg in _walk_global_ops(co)}
 
                 # see if nested function have any global refs
                 if co.co_consts:
@@ -556,10 +552,11 @@ class CloudPickler(Pickler):
         func_global_refs = self.extract_code_globals(code)
 
         # process all variables referenced by global environment
-        f_globals = {}
-        for var in func_global_refs:
-            if var in func.__globals__:
-                f_globals[var] = func.__globals__[var]
+        f_globals = {
+            var: func.__globals__[var]
+            for var in func_global_refs
+            if var in func.__globals__
+        }
 
         # defaults requires no processing
         defaults = func.__defaults__
@@ -592,9 +589,11 @@ class CloudPickler(Pickler):
         The name of this method is somewhat misleading: all types get
         dispatched here.
         """
-        if obj.__module__ == "__builtin__" or obj.__module__ == "builtins":
-            if obj in _BUILTIN_TYPE_NAMES:
-                return self.save_reduce(_builtin_type, (_BUILTIN_TYPE_NAMES[obj],), obj=obj)
+        if (
+            obj.__module__ in ["__builtin__", "builtins"]
+            and obj in _BUILTIN_TYPE_NAMES
+        ):
+            return self.save_reduce(_builtin_type, (_BUILTIN_TYPE_NAMES[obj],), obj=obj)
 
         if name is None:
             name = obj.__name__
@@ -631,21 +630,18 @@ class CloudPickler(Pickler):
         # Memoization rarely is ever useful due to python bounding
         if obj.__self__ is None:
             self.save_reduce(getattr, (obj.im_class, obj.__name__))
+        elif PY3:
+            self.save_reduce(types.MethodType, (obj.__func__, obj.__self__), obj=obj)
         else:
-            if PY3:
-                self.save_reduce(types.MethodType, (obj.__func__, obj.__self__), obj=obj)
-            else:
-                self.save_reduce(types.MethodType, (obj.__func__, obj.__self__, obj.__self__.__class__),
-                         obj=obj)
+            self.save_reduce(types.MethodType, (obj.__func__, obj.__self__, obj.__self__.__class__),
+                     obj=obj)
     dispatch[types.MethodType] = save_instancemethod
 
     def save_inst(self, obj):
         """Inner logic to save instance. Based off pickle.save_inst"""
         cls = obj.__class__
 
-        # Try the dispatch table (pickle module doesn't do it)
-        f = self.dispatch.get(cls)
-        if f:
+        if f := self.dispatch.get(cls):
             f(self, obj)  # Call unbound method with explicit self
             return
 
@@ -816,7 +812,10 @@ class CloudPickler(Pickler):
         if hasattr(obj, 'isatty') and obj.isatty():
             raise pickle.PicklingError("Cannot pickle files that map to tty objects")
         if 'r' not in obj.mode and '+' not in obj.mode:
-            raise pickle.PicklingError("Cannot pickle files that are not opened for reading: %s" % obj.mode)
+            raise pickle.PicklingError(
+                f"Cannot pickle files that are not opened for reading: {obj.mode}"
+            )
+
 
         name = obj.name
 
@@ -829,7 +828,7 @@ class CloudPickler(Pickler):
             contents = obj.read()
             obj.seek(curloc)
         except IOError:
-            raise pickle.PicklingError("Cannot pickle file %s as it cannot be read" % name)
+            raise pickle.PicklingError(f"Cannot pickle file {name} as it cannot be read")
         retval.write(contents)
         retval.seek(curloc)
 
@@ -879,10 +878,11 @@ def is_tornado_coroutine(func):
     if 'tornado.gen' not in sys.modules:
         return False
     gen = sys.modules['tornado.gen']
-    if not hasattr(gen, "is_coroutine_function"):
-        # Tornado version is too old
-        return False
-    return gen.is_coroutine_function(func)
+    return (
+        gen.is_coroutine_function(func)
+        if hasattr(gen, "is_coroutine_function")
+        else False
+    )
 
 def _rebuild_tornado_coroutine(func):
     from tornado import gen
@@ -1022,11 +1022,6 @@ def _fill_function(func, globals, defaults, dict, module, closure_values):
 
 
 def _make_empty_cell():
-    if False:
-        # trick the compiler into creating an empty cell in our lambda
-        cell = None
-        raise AssertionError('this route should not be executed')
-
     return (lambda: cell).__closure__[0]
 
 

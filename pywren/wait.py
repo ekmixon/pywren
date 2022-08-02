@@ -53,13 +53,6 @@ def wait(fs, return_when=ALL_COMPLETED, THREADPOOL_SIZE=64,
 
     """
 
-    # FIXME:  this will eventually provide an optimization for checking if a large
-    # number of futures have completed without too much network traffic
-    # by exploiting the callset
-
-    N = len(fs)
-
-
     # These are performance-related settings that we may eventually
     # want to expose to end users:
     MAX_DIRECT_QUERY_N = 16
@@ -67,6 +60,13 @@ def wait(fs, return_when=ALL_COMPLETED, THREADPOOL_SIZE=64,
 
     if return_when == ALL_COMPLETED:
         result_count = 0
+        # FIXME:  this will eventually provide an optimization for checking if a large
+        # number of futures have completed without too much network traffic
+        # by exploiting the callset
+
+        N = len(fs)
+
+
         while result_count < N:
 
             fs_dones, fs_notdones = _wait(fs, RETURN_EARLY_N,
@@ -120,7 +120,7 @@ def _wait(fs, return_early_n, max_direct_query_n,
     # get all the futures that are not yet done
     not_done_futures = [f for f in fs if f._state not in [JobState.success,
                                                           JobState.error]]
-    if len(not_done_futures) == 0:
+    if not not_done_futures:
         return fs, []
 
 
@@ -161,10 +161,7 @@ def _wait(fs, return_early_n, max_direct_query_n,
     if random_query:
         random.shuffle(still_not_done_futures)
 
-    while query_count < max_queries:
-
-        if len(done_call_ids) >= return_early_n:
-            break
+    while query_count < max_queries and len(done_call_ids) < return_early_n:
         num_to_query_at_once = THREADPOOL_SIZE
         fs_to_query = still_not_done_futures[query_count:query_count + num_to_query_at_once]
 

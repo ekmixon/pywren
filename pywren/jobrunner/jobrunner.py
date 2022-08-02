@@ -35,8 +35,7 @@ MAX_TRIES = 5
 
 def b64str_to_bytes(str_data):
     str_ascii = str_data.encode('ascii')
-    byte_data = base64.b64decode(str_ascii)
-    return byte_data
+    return base64.b64decode(str_ascii)
 
 # initial output file in case job fails
 output_dict = {'result' : None,
@@ -109,9 +108,7 @@ try:
         try:
             os.makedirs(to_make)
         except OSError as e:
-            if e.errno == 17:
-                pass
-            else:
+            if e.errno != 17:
                 raise e
         full_filename = os.path.join(to_make, os.path.basename(m_filename))
         #print "creating", full_filename

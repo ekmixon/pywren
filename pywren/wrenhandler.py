@@ -114,79 +114,78 @@ def download_runtime_if_necessary(s3_client, runtime_s3_bucket, runtime_s3_key,
 
     """
 
-    lock = open(RUNTIME_DOWNLOAD_LOCK, "a")
-    file_lock(lock)
-    # get runtime etag
-    runtime_meta = s3_client.head_object(Bucket=runtime_s3_bucket,
-                                         Key=runtime_s3_key)
-    # etags have strings (double quotes) on each end, so we strip those
-    ETag = str(runtime_meta['ETag'])[1:-1]
-    conda_runtime_dir = CONDA_RUNTIME_DIR.format(ETag)
-    logger.debug("The etag is ={}".format(ETag))
-    runtime_etag_dir = os.path.join(RUNTIME_LOC, ETag)
-    logger.debug("Runtime etag dir={}".format(runtime_etag_dir))
-    expected_target = os.path.join(runtime_etag_dir, 'condaruntime')
-    logger.debug("Expected target={}".format(expected_target))
-    # check if dir is linked to correct runtime
-    if os.path.exists(RUNTIME_LOC):
-        if os.path.exists(conda_runtime_dir):
+    with open(RUNTIME_DOWNLOAD_LOCK, "a") as lock:
+        file_lock(lock)
+        # get runtime etag
+        runtime_meta = s3_client.head_object(Bucket=runtime_s3_bucket,
+                                             Key=runtime_s3_key)
+        # etags have strings (double quotes) on each end, so we strip those
+        ETag = str(runtime_meta['ETag'])[1:-1]
+        conda_runtime_dir = CONDA_RUNTIME_DIR.format(ETag)
+        logger.debug(f"The etag is ={ETag}")
+        runtime_etag_dir = os.path.join(RUNTIME_LOC, ETag)
+        logger.debug(f"Runtime etag dir={runtime_etag_dir}")
+        expected_target = os.path.join(runtime_etag_dir, 'condaruntime')
+        logger.debug(f"Expected target={expected_target}")
+            # check if dir is linked to correct runtime
+        if os.path.exists(RUNTIME_LOC) and os.path.exists(conda_runtime_dir):
             if not os.path.islink(conda_runtime_dir):
-                raise Exception("{} is not a symbolic link, your runtime config is broken".format(
-                    conda_runtime_dir))
+                raise Exception(
+                    f"{conda_runtime_dir} is not a symbolic link, your runtime config is broken"
+                )
+
 
             existing_link = os.readlink(conda_runtime_dir)
             if existing_link == expected_target:
-                logger.debug("found existing {}, not re-downloading".format(ETag))
+                logger.debug(f"found existing {ETag}, not re-downloading")
                 return True
 
-    logger.debug("{} not cached, downloading".format(ETag))
-    # didn't cache, so we start over
-    if os.path.islink(conda_runtime_dir):
-        os.unlink(conda_runtime_dir)
+        logger.debug(f"{ETag} not cached, downloading")
+        # didn't cache, so we start over
+        if os.path.islink(conda_runtime_dir):
+            os.unlink(conda_runtime_dir)
 
-    if (delete_old_runtimes):
-        shutil.rmtree(RUNTIME_LOC, True)
+        if (delete_old_runtimes):
+            shutil.rmtree(RUNTIME_LOC, True)
 
-    os.makedirs(runtime_etag_dir)
+        os.makedirs(runtime_etag_dir)
 
-    res = s3_client.get_object(Bucket=runtime_s3_bucket,
-                               Key=runtime_s3_key)
-    res_buffer = res['Body'].read()
-    try:
-        res_buffer_io = io.BytesIO(res_buffer)
-        condatar = tarfile.open(mode="r:gz", fileobj=res_buffer_io)
-        condatar.extractall(runtime_etag_dir)
-        del res_buffer_io # attempt to clear this proactively
-        del res_buffer
-    except (OSError, IOError) as e:
-        # no difference, see https://stackoverflow.com/q/29347790/1073963
-        # do the cleanup
-        shutil.rmtree(runtime_etag_dir, True)
-        if e.args[0] == 28:
+        res = s3_client.get_object(Bucket=runtime_s3_bucket,
+                                   Key=runtime_s3_key)
+        res_buffer = res['Body'].read()
+        try:
+            res_buffer_io = io.BytesIO(res_buffer)
+            condatar = tarfile.open(mode="r:gz", fileobj=res_buffer_io)
+            condatar.extractall(runtime_etag_dir)
+            del res_buffer_io # attempt to clear this proactively
+            del res_buffer
+        except (OSError, IOError) as e:
+            # no difference, see https://stackoverflow.com/q/29347790/1073963
+            # do the cleanup
+            shutil.rmtree(runtime_etag_dir, True)
+            if e.args[0] == 28:
 
-            raise Exception("RUNTIME_TOO_BIG",
-                            "Ran out of space when untarring runtime")
-        else:
-            raise Exception("RUNTIME_ERROR", str(e))
-    except tarfile.ReadError as e:
-        # do the cleanup
-        shutil.rmtree(runtime_etag_dir, True)
-        raise Exception("RUNTIME_READ_ERROR", str(e))
-    except:
-        shutil.rmtree(runtime_etag_dir, True)
-        raise
+                raise Exception("RUNTIME_TOO_BIG",
+                                "Ran out of space when untarring runtime")
+            else:
+                raise Exception("RUNTIME_ERROR", str(e))
+        except tarfile.ReadError as e:
+            # do the cleanup
+            shutil.rmtree(runtime_etag_dir, True)
+            raise Exception("RUNTIME_READ_ERROR", str(e))
+        except:
+            shutil.rmtree(runtime_etag_dir, True)
+            raise
 
-    # final operation
-    os.symlink(expected_target, conda_runtime_dir)
-    file_unlock(lock)
-    lock.close()
+        # final operation
+        os.symlink(expected_target, conda_runtime_dir)
+        file_unlock(lock)
     return False
 
 
 def b64str_to_bytes(str_data):
     str_ascii = str_data.encode('ascii')
-    byte_data = base64.b64decode(str_ascii)
-    return byte_data
+    return base64.b64decode(str_ascii)
 
 
 def aws_lambda_handler(event, context):
@@ -206,10 +205,13 @@ def get_server_info():
 
     server_info = {'uname' : str(platform.uname())}
     if os.path.exists("/proc"):
-        server_info.update({'/proc/cpuinfo': open("/proc/cpuinfo", 'r').read(),
-                            '/proc/meminfo': open("/proc/meminfo", 'r').read(),
-                            '/proc/self/cgroup': open("/proc/meminfo", 'r').read(),
-                            '/proc/cgroups': open("/proc/cgroups", 'r').read()})
+        server_info |= {
+            '/proc/cpuinfo': open("/proc/cpuinfo", 'r').read(),
+            '/proc/meminfo': open("/proc/meminfo", 'r').read(),
+            '/proc/self/cgroup': open("/proc/meminfo", 'r').read(),
+            '/proc/cgroups': open("/proc/cgroups", 'r').read(),
+        }
+
 
     return server_info
 

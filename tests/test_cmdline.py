@@ -66,12 +66,11 @@ def questions_to_string(q):
         if action is None:
             # default
             append_str = "\n"
+        elif isinstance(action, string_types):
+            append_str = action + "\n"
         else:
-            if isinstance(action, string_types):
-                append_str = action + "\n"
-            else:
-                # assume action is a list of strings
-                append_str = "\n".join(action) + "\n"
+            # assume action is a list of strings
+            append_str = "\n".join(action) + "\n"
         out_str += append_str
     return out_str
 

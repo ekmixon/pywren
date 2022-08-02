@@ -241,7 +241,7 @@ class ModuleDependencyAnalyzer(object):
                 if mod_type != imp.PY_COMPILED:
                     ret = False
             else:
-                raise Exception('Unrecognized module type %s' % submodule_name)
+                raise Exception(f'Unrecognized module type {submodule_name}')
 
         return ret
 
@@ -287,10 +287,7 @@ class ModuleDependencyAnalyzer(object):
             # We ignore all imports with levels other than 0. That's because if
             # if level > 0, we know that it's a relative import, and we only
             # care about root modules.
-            if node.level == 0:
-                return {self._extract_root_module(node.module)}
-            else:
-                return set()
+            return {self._extract_root_module(node.module)} if node.level == 0 else set()
         elif hasattr(node, 'body') and hasattr(node.body, '__iter__'):
             # Not all bodies are lists (for ex. exec)
             imps = set()

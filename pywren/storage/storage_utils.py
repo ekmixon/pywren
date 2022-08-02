@@ -32,8 +32,7 @@ def create_func_key(prefix, callset_id):
     :param callset_id: callset's ID
     :return: function key
     """
-    func_key = posixpath.join(prefix, callset_id, func_key_suffix)
-    return func_key
+    return posixpath.join(prefix, callset_id, func_key_suffix)
 
 
 def create_agg_data_key(prefix, callset_id):
@@ -43,8 +42,7 @@ def create_agg_data_key(prefix, callset_id):
     :param callset_id: callset's ID
     :return: a key for aggregate data
     """
-    agg_data_key = posixpath.join(prefix, callset_id, agg_data_key_suffix)
-    return agg_data_key
+    return posixpath.join(prefix, callset_id, agg_data_key_suffix)
 
 
 def create_data_key(prefix, callset_id, call_id):
@@ -108,8 +106,9 @@ def create_keys(prefix, callset_id, call_id):
 def get_storage_path(config):
     if config['storage_backend'] != 's3':
         raise NotImplementedError(
-            ("Using {} as storage backend is not supported yet").format(
-                config['storage_backend']))
+            f"Using {config['storage_backend']} as storage backend is not supported yet"
+        )
+
     return [config['storage_backend'], config['backend_config']['bucket'], config['storage_prefix']]
 
 

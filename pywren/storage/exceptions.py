@@ -16,16 +16,16 @@
 
 class StorageNoSuchKeyError(Exception):
     def __init__(self, key):
-        msg = "No such key {} found in storage.".format(key)
+        msg = f"No such key {key} found in storage."
         super(StorageNoSuchKeyError, self).__init__(msg)
 
 class StorageOutputNotFoundError(Exception):
     def __init__(self, callset_id, call_id):
-        msg = "Output for {} {} not found in storage.".format(callset_id, call_id)
+        msg = f"Output for {callset_id} {call_id} not found in storage."
         super(StorageOutputNotFoundError, self).__init__(msg)
 
 class StorageConfigMismatchError(Exception):
     def __init__(self, current_path, prev_path):
-        msg = "The data is stored at {}, but current storage is configured at {}.".format(
-            prev_path, current_path)
+        msg = f"The data is stored at {prev_path}, but current storage is configured at {current_path}."
+
         super(StorageConfigMismatchError, self).__init__(msg)

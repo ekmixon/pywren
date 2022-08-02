@@ -91,8 +91,7 @@ class Storage(object):
         keys = self.backend_handler.list_keys_with_prefix(callset_prefix)
         suffix = status_key_suffix
         status_keys = [k for k in keys if suffix in k]
-        call_ids = [k[len(callset_prefix)+1:].split("/")[0] for k in status_keys]
-        return call_ids
+        return [k[len(callset_prefix)+1:].split("/")[0] for k in status_keys]
 
     def get_call_status(self, callset_id, call_id):
         """
@@ -131,12 +130,10 @@ def get_runtime_info(runtime_config):
     if runtime_config['runtime_storage'] != 's3':
         raise NotImplementedError(("Storing runtime in non-S3 storage is not " +
                                    "supported yet").format(runtime_config['runtime_storage']))
-    config = dict()
-    config['bucket'] = runtime_config['s3_bucket']
+    config = {'bucket': runtime_config['s3_bucket']}
     handler = S3Backend(config)
     key = runtime_config['s3_key']
     if '.tar.gz' in key:
         key = key.replace(".tar.gz", ".meta.json")
     json_str = handler.get_object(key)
-    runtime_meta = json.loads(json_str.decode("ascii"))
-    return runtime_meta
+    return json.loads(json_str.decode("ascii"))

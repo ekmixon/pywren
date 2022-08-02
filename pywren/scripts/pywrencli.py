@@ -57,7 +57,7 @@ def get_aws_account_id(verbose=True):
     client = boto3.client("sts")
     account_id = client.get_caller_identity()["Account"]
     if verbose:
-        click.echo("Your AWS account ID is {}".format(account_id))
+        click.echo(f"Your AWS account ID is {account_id}")
     return account_id
 
 
@@ -135,12 +135,14 @@ def create_config(ctx, force, aws_region, lambda_role, function_name, bucket_nam
 
     # print out message about the stuff you need to do
     if os.path.exists(filename) and not force:
-        raise ValueError("{} already exists; not overwriting (did you need --force?)".format(
-            filename))
+        raise ValueError(
+            f"{filename} already exists; not overwriting (did you need --force?)"
+        )
+
 
     open(filename, 'w').write(default_yaml)
-    click.echo("new default file created in {}".format(filename))
-    click.echo("lambda role is {}".format(lambda_role))
+    click.echo(f"new default file created in {filename}")
+    click.echo(f"lambda role is {lambda_role}")
 
 
 @click.command("test_config")
@@ -171,8 +173,13 @@ def create_role(ctx):
     iamclient = boto3.client('iam')
     json_policy = json.dumps(pywren.wrenconfig.basic_role_policy)
     role_name = config['account']['aws_lambda_role']
-    roles = [x for x in iamclient.list_roles()["Roles"] if x["RoleName"] == role_name]
-    if (len(roles) == 0):
+    if roles := [
+        x
+        for x in iamclient.list_roles()["Roles"]
+        if x["RoleName"] == role_name
+    ]:
+        print("Using existing IAM role...")
+    else:
         iam.create_role(RoleName=role_name,
                         AssumeRolePolicyDocument=json_policy)
         more_json_policy = json.dumps(pywren.wrenconfig.more_permissions_policy)
@@ -182,10 +189,9 @@ def create_role(ctx):
         more_json_policy = more_json_policy.replace("AWS_ACCOUNT_ID", str(AWS_ACCOUNT_ID))
         more_json_policy = more_json_policy.replace("AWS_REGION", AWS_REGION)
 
-        iam.RolePolicy(role_name, '{}-more-permissions'.format(role_name)).put(
-            PolicyDocument=more_json_policy)
-    else:
-        print("Using existing IAM role...")
+        iam.RolePolicy(role_name, f'{role_name}-more-permissions').put(
+            PolicyDocument=more_json_policy
+        )
 
 
 @click.command("create_bucket")
@@ -216,14 +222,15 @@ def create_instance_profile(ctx):
     iam = boto3.resource('iam')
     iamclient = boto3.client('iam')
     response = iamclient.list_instance_profiles()
-    instance_profiles = [profile for profile in response['InstanceProfiles']
-                         if profile['InstanceProfileName'] == instance_profile_name]
-
-    if len(instance_profiles) == 0:
+    if instance_profiles := [
+        profile
+        for profile in response['InstanceProfiles']
+        if profile['InstanceProfileName'] == instance_profile_name
+    ]:
+        print("Using existing instance profile...")
+    else:
         iam.create_instance_profile(InstanceProfileName=instance_profile_name)
         iam.InstanceProfile(instance_profile_name).add_role(RoleName=role_name)
-    else:
-        print("Using existing instance profile...")
 
 
 @click.command("create_ec2_ssh_key")
@@ -237,15 +244,18 @@ def create_ec2_ssh_key(ctx):
     if not click.confirm("Do you want to be able to connect to launched standalone instances?",
                          default=False):
         return
-    key_name = click.prompt("Name of ssh key:",
-                            default="ec2-{}".format(config['account']['aws_region']))
+    key_name = click.prompt(
+        "Name of ssh key:", default=f"ec2-{config['account']['aws_region']}"
+    )
+
 
     ec2client = boto3.client('ec2')
     key_pairs = ec2client.describe_key_pairs()
     key_pairs = [key_pair for key_pair in key_pairs['KeyPairs'] if key_pair['KeyName'] == key_name]
-    create_key = len(key_pairs) == 0
+    create_key = not key_pairs
     if create_key and not click.confirm(
-            "{} does not exist, would you like to create a new key pair?".format(key_name)):
+        f"{key_name} does not exist, would you like to create a new key pair?"
+    ):
         return
     if create_key:
         ec2 = boto3.resource('ec2')
@@ -254,10 +264,10 @@ def create_ec2_ssh_key(ctx):
                                     default=os.path.expanduser("~/.ssh/"))
         if not os.path.exists(key_location):
             os.makedirs(key_location)
-        key_path = os.path.join(key_location, "{}.pem".format(key_name))
+        key_path = os.path.join(key_location, f"{key_name}.pem")
         with open(key_path, "w+") as key_file:
             key_file.write(key_pair.key_material)
-        click.echo("Wrote private key to {}".format(key_path))
+        click.echo(f"Wrote private key to {key_path}")
 
     config_yaml = open(config_filename).read()
     config_yaml = config_yaml.replace('PYWREN_DEFAULT_KEY', key_name)
@@ -302,28 +312,23 @@ def deploy_lambda(ctx, update_if_exists=True):
 
     lambclient = boto3.client('lambda', region_name=AWS_REGION)
 
-    ROLE = "arn:aws:iam::{}:role/{}".format(AWS_ACCOUNT_ID, AWS_LAMBDA_ROLE)
+    ROLE = f"arn:aws:iam::{AWS_ACCOUNT_ID}:role/{AWS_LAMBDA_ROLE}"
 
     b = list_all_funcs(lambclient)
 
-    function_exists = False
-
     function_name_list = [f['FunctionName'] for f in b['Functions']]
 
-    if FUNCTION_NAME in function_name_list:
-        function_exists = True
-
+    function_exists = FUNCTION_NAME in function_name_list
     retries = 0
     while retries < 10:
         try:
             if function_exists:
                 print("function exists, updating")
-                if update_if_exists:
-                    lambclient.update_function_code(FunctionName=FUNCTION_NAME,
-                                                    ZipFile=file_like_object.getvalue())
-                    return True
-                else:
+                if not update_if_exists:
                     raise Exception() # FIXME will this work?
+                lambclient.update_function_code(FunctionName=FUNCTION_NAME,
+                                                ZipFile=file_like_object.getvalue())
+                return True
             else:
 
                 lambclient.create_function(FunctionName=FUNCTION_NAME,
@@ -336,18 +341,15 @@ def deploy_lambda(ctx, update_if_exists=True):
                 print("Successfully created function.")
                 break
         except botocore.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == "InvalidParameterValueException":
-
-                retries += 1
-
-                # FIXME actually check for "botocore.exceptions.ClientError: An error occurred
-                # (InvalidParameterValueException) when calling the CreateFunction operation:
-                # The role defined for the function cannot be assumed by Lambda."
-                print("Pausing for 5 seconds for changes to propagate.")
-                time.sleep(5)
-                continue
-            else:
+            if e.response['Error']['Code'] != "InvalidParameterValueException":
                 raise e
+            retries += 1
+
+            # FIXME actually check for "botocore.exceptions.ClientError: An error occurred
+            # (InvalidParameterValueException) when calling the CreateFunction operation:
+            # The role defined for the function cannot be assumed by Lambda."
+            print("Pausing for 5 seconds for changes to propagate.")
+            time.sleep(5)
     if retries == 10:
         raise ValueError("could not register funciton after 10 tries")
 
@@ -382,10 +384,12 @@ def delete_role(ctx):
     iamclient = boto3.client('iam')
     role_name = config['account']['aws_lambda_role']
 
-    iamclient.delete_role_policy(RoleName=role_name,
-                                 PolicyName='{}-more-permissions'.format(role_name))
+    iamclient.delete_role_policy(
+        RoleName=role_name, PolicyName=f'{role_name}-more-permissions'
+    )
+
     iamclient.delete_role(RoleName=role_name)
-    print("deleted role{}".format(role_name))
+    print(f"deleted role{role_name}")
 
 
 @click.command("delete_instance_profile")
@@ -419,7 +423,7 @@ def create_queue(ctx):
     SQS_QUEUE_NAME = config['standalone']['sqs_queue_name']
 
     sqs = boto3.resource('sqs', region_name=AWS_REGION)
-    print("creating queue {}".format(SQS_QUEUE_NAME))
+    print(f"creating queue {SQS_QUEUE_NAME}")
     sqs.create_queue(QueueName=SQS_QUEUE_NAME,
                      Attributes={'VisibilityTimeout' : "20"})
 
@@ -472,7 +476,7 @@ def print_latest_logs(ctx):
 
     logclient = boto3.client('logs', region_name=config['account']['aws_region'])
 
-    logGroupName = "/aws/lambda/{}".format(config['lambda']['function_name'])
+    logGroupName = f"/aws/lambda/{config['lambda']['function_name']}"
 
     response = logclient.describe_log_streams(
         logGroupName=logGroupName,
@@ -487,7 +491,7 @@ def print_latest_logs(ctx):
         logStreamName=latest_logStreamName,)
 
     for event in response['events']:
-        print("{} : {}".format(event['timestamp'], event['message'].strip()))
+        print(f"{event['timestamp']} : {event['message'].strip()}")
 
 
 @click.command("log_url")
@@ -615,10 +619,13 @@ def standalone_queue_size(ctx):
 
     sqs = boto3.resource('sqs', region_name=AWS_REGION)
     queue = sqs.get_queue_by_name(QueueName=SQS_QUEUE_NAME)
-    click.echo("Approximate number of jobs in flight: {}".format(
-        queue.attributes['ApproximateNumberOfMessagesNotVisible']))
-    click.echo("Approximate number of jobs in queue: {}".format(
-        queue.attributes['ApproximateNumberOfMessages']))
+    click.echo(
+        f"Approximate number of jobs in flight: {queue.attributes['ApproximateNumberOfMessagesNotVisible']}"
+    )
+
+    click.echo(
+        f"Approximate number of jobs in queue: {queue.attributes['ApproximateNumberOfMessages']}"
+    )
 
 @standalone.command("purge_queue")
 @click.pass_context
@@ -681,7 +688,7 @@ def cleanup_all(ctx, force):
             ctx.invoke(func)
         except Exception as e:
             if force:
-                print("{} was raised, ignoring".format(e))
+                print(f"{e} was raised, ignoring")
             else:
                 raise
 

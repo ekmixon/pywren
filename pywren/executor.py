@@ -63,16 +63,16 @@ class Executor(object):
             self.serializer = serialize.SerializeIndependent()
 
         self.map_item_limit = None
-        if 'scheduler' in self.config:
-            if 'map_item_limit' in config['scheduler']:
-                self.map_item_limit = config['scheduler']['map_item_limit']
+        if 'scheduler' in self.config and 'map_item_limit' in config['scheduler']:
+            self.map_item_limit = config['scheduler']['map_item_limit']
 
     def put_data(self, data_key, data_str,
                  callset_id, call_id):
 
         self.storage.put_data(data_key, data_str)
-        logger.info("call_async {} {} data upload complete {}".format(callset_id, call_id,
-                                                                      data_key))
+        logger.info(
+            f"call_async {callset_id} {call_id} data upload complete {data_key}"
+        )
 
     def invoke_with_keys(self, func_key, data_key, output_key,
                          status_key, cancel_key,
@@ -88,7 +88,7 @@ class Executor(object):
                 isinstance(self.runtime_meta_info['urls'], list) and
                 len(self.runtime_meta_info['urls']) >= 1):
             num_shards = len(self.runtime_meta_info['urls'])
-            logger.debug("Runtime is sharded, choosing from {} copies.".format(num_shards))
+            logger.debug(f"Runtime is sharded, choosing from {num_shards} copies.")
             random.seed()
             runtime_url = random.choice(self.runtime_meta_info['urls'])
 
@@ -109,25 +109,25 @@ class Executor(object):
             'runtime_url' : runtime_url}
 
         if extra_env is not None:
-            logger.debug("Extra environment vars {}".format(extra_env))
+            logger.debug(f"Extra environment vars {extra_env}")
             arg_dict['extra_env'] = extra_env
 
         if extra_meta is not None:
             # sanity
             for k, v in extra_meta.items():
                 if k in arg_dict:
-                    raise ValueError("Key {} already in dict".format(k))
+                    raise ValueError(f"Key {k} already in dict")
                 arg_dict[k] = v
 
         host_submit_time = time.time()
         arg_dict['host_submit_time'] = host_submit_time
 
-        logger.info("call_async {} {} lambda invoke ".format(callset_id, call_id))
+        logger.info(f"call_async {callset_id} {call_id} lambda invoke ")
         lambda_invoke_time_start = time.time()
 
         # overwrite explicit args, mostly used for testing via injection
         if overwrite_invoke_args is not None:
-            arg_dict.update(overwrite_invoke_args)
+            arg_dict |= overwrite_invoke_args
 
         # do the invocation
         self.invoker.invoke(arg_dict)
@@ -138,7 +138,7 @@ class Executor(object):
 
         host_job_meta.update(self.invoker.config())
 
-        logger.info("call_async {} {} lambda invoke complete".format(callset_id, call_id))
+        logger.info(f"call_async {callset_id} {call_id} lambda invoke complete")
 
 
         host_job_meta.update(arg_dict)
@@ -191,8 +191,8 @@ class Executor(object):
 
         if self.map_item_limit is not None and len(data) > self.map_item_limit:
             raise ValueError("len(data) ={}, exceeding map item limit of {}"\
-                             "consider mapping over a smaller"\
-                             "number of items".format(len(data),
+                                 "consider mapping over a smaller"\
+                                 "number of items".format(len(data),
                                                       self.map_item_limit))
 
         host_job_meta = {}
@@ -218,11 +218,6 @@ class Executor(object):
             host_job_meta['agg_data'] = True
             host_job_meta['data_upload_time'] = time.time() - agg_upload_time
             host_job_meta['data_upload_timestamp'] = time.time()
-        else:
-            # FIXME add warning that you wanted data all as one but
-            # it exceeded max data size
-            pass
-
         if exclude_modules:
             for module in exclude_modules:
                 for mod_path in list(mod_paths):
@@ -342,8 +337,8 @@ class Executor(object):
         this_events_logs = []
         in_this_event = False
         for event in log_events['events']:
-            start_string = "START RequestId: {}".format(aws_request_id)
-            end_string = "REPORT RequestId: {}".format(aws_request_id)
+            start_string = f"START RequestId: {aws_request_id}"
+            end_string = f"REPORT RequestId: {aws_request_id}"
 
             message = event['message'].strip()
             timestamp = int(event['timestamp'])

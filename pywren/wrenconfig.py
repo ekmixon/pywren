@@ -28,7 +28,7 @@ TIMEOUT = 300
 AWS_ACCOUNT_ID = 783175685819
 AWS_ROLE = "helloworld_exec_role"
 
-ROLE = "arn:aws:iam::{}:role/{}".format(AWS_ACCOUNT_ID, AWS_ROLE)
+ROLE = f"arn:aws:iam::{AWS_ACCOUNT_ID}:role/{AWS_ROLE}"
 
 AWS_REGION_DEFAULT = 'us-west-2'
 AWS_S3_BUCKET_DEFAULT = "pywren.data"
@@ -53,8 +53,9 @@ def load(config_filename):
     # sanity check
     if res['s3']['bucket'] == 'BUCKET_NAME':
         raise Exception(
-            "{} has bucket name as {} -- make sure you change the default bucket".format(
-                config_filename, res['s3']['bucket']))
+            f"{config_filename} has bucket name as {res['s3']['bucket']} -- make sure you change the default bucket"
+        )
+
     if 'storage_backend' not in res:
         res = patch_storage_config(res)
     if res['standalone']['ec2_ssh_key'] == DEFAULT_KEY_NAME:
@@ -63,8 +64,7 @@ def load(config_filename):
     return res
 
 def get_default_home_filename():
-    default_home_filename = os.path.join(os.path.expanduser("~/.pywren_config"))
-    return default_home_filename
+    return os.path.join(os.path.expanduser("~/.pywren_config"))
 
 
 def get_default_config_filename():
@@ -74,16 +74,14 @@ def get_default_config_filename():
     then ~/.pywren_config
     """
     if 'PYWREN_CONFIG_FILE' in os.environ:
-        config_filename = os.environ['PYWREN_CONFIG_FILE']
-        # FIXME log this
+        return os.environ['PYWREN_CONFIG_FILE']
+            # FIXME log this
 
     elif os.path.exists(".pywren_config"):
-        config_filename = os.path.abspath('.pywren_config')
+        return os.path.abspath('.pywren_config')
 
     else:
-        config_filename = get_default_home_filename()
-
-    return config_filename
+        return get_default_home_filename()
 
 def patch_storage_config(config_data):
     if 'storage_backend' in config_data:
@@ -106,14 +104,15 @@ def default():
     if config_filename is None:
         raise ValueError("could not find configuration file")
 
-    config_data = load(config_filename)
-    return config_data
+    return load(config_filename)
 
 
 def extract_storage_config(config):
-    storage_config = dict()
-    storage_config['storage_backend'] = config['storage_backend']
-    storage_config['storage_prefix'] = config['storage_prefix']
+    storage_config = {
+        'storage_backend': config['storage_backend'],
+        'storage_prefix': config['storage_prefix'],
+    }
+
     if storage_config['storage_backend'] == 's3':
         storage_config['backend_config'] = {}
         storage_config['backend_config']['bucket'] = config['s3']['bucket']

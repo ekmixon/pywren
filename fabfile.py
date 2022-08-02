@@ -106,15 +106,15 @@ def create_queue():
     queue = sqs.create_queue(QueueName=QUEUE_NAME, 
                              Attributes={'VisibilityTimeout' : "20"})
 
-@task 
+@task
 def put_message(): # MessageBody="hello world"):
     # Get the service resource
     sqs = boto3.resource('sqs', region_name=AWS_REGION)
-    
-    
+
+
     # Get the queue
     queue = sqs.get_queue_by_name(QueueName=QUEUE_NAME)
-    MessageBody = "{}".format(time.time())
+    MessageBody = f"{time.time()}"
     response = queue.send_message(MessageBody=MessageBody)
 
 @task 
@@ -138,16 +138,15 @@ def sqs_worker(number=1):
     number = int(number)
 
     sqs = boto3.resource('sqs', region_name=AWS_REGION)
-    
+
     # Get the queue
     queue = sqs.get_queue_by_name(QueueName=QUEUE_NAME)
 
     LOG_FILE = "sqs.log"
     def process_message(m):
-        fid = open(LOG_FILE, 'a')
-        fid.write("sent {} received {}\n".format(m.body, time.time()))
-        m.delete()
-        fid.close()
+        with open(LOG_FILE, 'a') as fid:
+            fid.write("sent {} received {}\n".format(m.body, time.time()))
+            m.delete()
 
     pool = ThreadPool(10)
     while(True):
@@ -205,12 +204,12 @@ def create_instance_profile():
 
 @task 
 def launch_instance():
-    
+
     tgt_ami = 'ami-b04e92d0'
     AWS_REGION = 'us-west-2'
     my_aws_key = 'ec2-us-west-2'
 
-    
+
     INSTANCE_TYPE = 'm3.xlarge'
     instance_name = AWS_INSTANCE_NAME
 
@@ -343,7 +342,7 @@ def cleanup_travis_leftovers():
                 p.delete()
             r.delete()
             removed_role_count += 1
-    print("removed {} roles".format(removed_role_count))
+    print(f"removed {removed_role_count} roles")
 
 @task 
 def cleanup_leftover_buckets():
@@ -370,7 +369,7 @@ def cleanup_leftover_buckets():
                 else:
                     break
             #for obj in bucket.objects.all():
-                
+
             print("deleting", bucket.name)
             bucket.delete()
             

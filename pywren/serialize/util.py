@@ -42,8 +42,7 @@ import glob2
 
 def bytes_to_b64str(byte_data):
     byte_data_64 = base64.b64encode(byte_data)
-    byte_data_64_ascii = byte_data_64.decode('ascii')
-    return byte_data_64_ascii
+    return byte_data_64.decode('ascii')
 
 def create_mod_data(mod_paths):
 

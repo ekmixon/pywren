@@ -240,8 +240,9 @@ def _create_instances(num_instances,
                 spot_requests = client.describe_spot_instance_requests(
                     SpotInstanceRequestIds=request_ids)['SpotInstanceRequests']
 
-                failed_requests = [r for r in spot_requests if r['State'] == 'failed']
-                if failed_requests:
+                if failed_requests := [
+                    r for r in spot_requests if r['State'] == 'failed'
+                ]:
                     failure_reasons = {r['Status']['Code'] for r in failed_requests}
                     raise Exception(
                         "The spot request failed for the following reason{s}: {reasons}"
@@ -300,17 +301,16 @@ def _create_instances(num_instances,
             print(e)
         if spot_requests:
             request_ids = [r['SpotInstanceRequestId'] for r in spot_requests]
-            if any([r['State'] != 'active' for r in spot_requests]):
+            if any(r['State'] != 'active' for r in spot_requests):
                 print("Canceling spot instance requests...")
                 client.cancel_spot_instance_requests(
                     SpotInstanceRequestIds=request_ids)
             # Make sure we have the latest information on any launched spot instances.
             spot_requests = client.describe_spot_instance_requests(
                 SpotInstanceRequestIds=request_ids)['SpotInstanceRequests']
-            instance_ids = [
-                r['InstanceId'] for r in spot_requests
-                if 'InstanceId' in r]
-            if instance_ids:
+            if instance_ids := [
+                r['InstanceId'] for r in spot_requests if 'InstanceId' in r
+            ]:
                 cluster_instances = list(
                     ec2.instances.filter(
                         Filters=[
@@ -320,9 +320,7 @@ def _create_instances(num_instances,
 
 
 def tags_to_dict(d):
-    if d is None:
-        return {}
-    return {a['Key'] : a['Value'] for a in d}
+    return {} if d is None else {a['Key'] : a['Value'] for a in d}
 
 def list_instances(aws_region, instance_name):
     """

@@ -75,9 +75,7 @@ def get_my_ec2_instance(aws_region):
         return instance
 
 def tags_to_dict(d):
-    if d is None:
-        return {}
-    return {a['Key'] : a['Value'] for a in d}
+    return {} if d is None else {a['Key'] : a['Value'] for a in d}
 
 
 def get_my_ec2_meta(instance):
@@ -87,13 +85,12 @@ def get_my_ec2_meta(instance):
     r = {'public_dns_name' : instance.public_dns_name,
          'public_ip_address' : instance.public_ip_address,
          'instance_id': instance.id}
-    r.update(tags)
+    r |= tags
     return r
 
 def get_my_uptime():
     with open('/proc/uptime', 'r') as f:
-        uptime_seconds = float(f.readline().split()[0])
-        return uptime_seconds
+        return float(f.readline().split()[0])
 
 def check_is_ec2():
     """
@@ -155,7 +152,7 @@ def server_runner(aws_region, sqs_queue_name,
         response = queue.receive_messages(WaitTimeSeconds=queue_receive_message_timeout)
         if len(response) > 0:
             m = response[0]
-            logger.info("Dispatching message_id={}".format(m.message_id))
+            logger.info(f"Dispatching message_id={m.message_id}")
 
             process_message(m, local_message_i, max_run_time, run_dir)
             message_count += 1
@@ -167,24 +164,26 @@ def server_runner(aws_region, sqs_queue_name,
             logger.debug("no message, idle for {:3.0f} sec".format(idle_time))
 
         # this is EC2_only
-        if max_idle_time is not None and \
-           idle_terminate_granularity is not None:
-            if idle_time > max_idle_time:
-                my_uptime = get_my_uptime()
-                time_frac = (my_uptime % idle_terminate_granularity)
+        if (
+            max_idle_time is not None
+            and idle_terminate_granularity is not None
+            and idle_time > max_idle_time
+        ):
+            my_uptime = get_my_uptime()
+            time_frac = (my_uptime % idle_terminate_granularity)
 
-                logger.debug("Instance has been up for " + \
-                    "{:.0f} and inactive for {:.0f} time_frac={:.0f} terminate_thold={:.0f}".format(
-                        my_uptime, idle_time, time_frac, terminate_thold_sec))
+            logger.debug("Instance has been up for " + \
+                "{:.0f} and inactive for {:.0f} time_frac={:.0f} terminate_thold={:.0f}".format(
+                    my_uptime, idle_time, time_frac, terminate_thold_sec))
 
-                if time_frac > terminate_thold_sec:
-                    logger.info("Instance has been up for {:.0f}"
-                                "and inactive for {:.0f}, terminating".format(my_uptime,
-                                                                              idle_time))
-                    ec2_self_terminate(idle_time, my_uptime,
-                                       message_count, in_minutes=1)
+            if time_frac > terminate_thold_sec:
+                logger.info("Instance has been up for {:.0f}"
+                            "and inactive for {:.0f}, terminating".format(my_uptime,
+                                                                          idle_time))
+                ec2_self_terminate(idle_time, my_uptime,
+                                   message_count, in_minutes=1)
 
-                    sys.exit(0)
+                sys.exit(0)
 
 def process_message(m, local_message_i, max_run_time, run_dir):
 
@@ -195,9 +194,10 @@ def process_message(m, local_message_i, max_run_time, run_dir):
 
     extra_env_debug = event.get('extra_env', {})
 
-    logger.info("processing message_id={} "
-                "callset_id={} call_id={}".format(m.message_id, callset_id,
-                                                  call_id))
+    logger.info(
+        f"processing message_id={m.message_id} callset_id={callset_id} call_id={call_id}"
+    )
+
 
     # FIXME this is all for debugging
     if 'DEBUG_THROW_EXCEPTION' in extra_env_debug:
@@ -228,7 +228,7 @@ def process_message(m, local_message_i, max_run_time, run_dir):
 
 
         if not p.is_alive():
-            logger.debug("{} - attempting to join process".format(message_id))
+            logger.debug(f"{message_id} - attempting to join process")
             # FIXME will this join ever hang?
             p.join()
             break
@@ -239,8 +239,10 @@ def process_message(m, local_message_i, max_run_time, run_dir):
 
         run_time = time.time() - start_time
 
-    logger.info("deleting message_id={} "
-                "callset_id={} call_id={}".format(m.message_id, callset_id, call_id))
+    logger.info(
+        f"deleting message_id={m.message_id} callset_id={callset_id} call_id={call_id}"
+    )
+
 
 
     m.delete()
@@ -259,12 +261,14 @@ def job_handler(event, job_i, run_dir,
     Just for debugging
     """
 
-    debug_pid = open("/tmp/pywren.scripts.standalone.{}.{}.log".format(os.getpid(),
-                                                                       time.time()), 'w')
+    debug_pid = open(
+        f"/tmp/pywren.scripts.standalone.{os.getpid()}.{time.time()}.log", 'w'
+    )
+
 
     call_id = event['call_id']
     callset_id = event['callset_id']
-    logger.info("jobhandler_thread callset_id={} call_id={}".format(callset_id, call_id))
+    logger.info(f"jobhandler_thread callset_id={callset_id} call_id={call_id}")
 
     original_dir = os.getcwd()
 
@@ -276,20 +280,23 @@ def job_handler(event, job_i, run_dir,
 
     context = {'jobnum' : job_i}
     if extra_context is not None:
-        context.update(extra_context)
+        context |= extra_context
 
     os.chdir(task_run_dir)
 
     try:
         debug_pid.write("invoking generic_handler\n")
-        logger.debug("jobhandler_thread callset_id={} call_id={} invoking".format(callset_id,
-                                                                                  call_id))
+        logger.debug(
+            f"jobhandler_thread callset_id={callset_id} call_id={call_id} invoking"
+        )
+
 
         wrenhandler.generic_handler(event, context)
     except Exception as e:
-        logger.warning("jobhandler_thread callset_id={} "
-                       "call_id={} exception={}".format(callset_id,
-                                                        call_id, str(e)))
+        logger.warning(
+            f"jobhandler_thread callset_id={callset_id} call_id={call_id} exception={str(e)}"
+        )
+
 
     finally:
         debug_pid.write("generic handler finally\n")
@@ -299,7 +306,9 @@ def job_handler(event, job_i, run_dir,
         os.chdir(original_dir)
 
     debug_pid.write("done and returning\n")
-    logger.debug("jobhandler_thread callset_id={} call_id={} returning".format(callset_id, call_id))
+    logger.debug(
+        f"jobhandler_thread callset_id={callset_id} call_id={call_id} returning"
+    )
 
 
 
@@ -373,7 +382,7 @@ def server(aws_region, max_run_time, run_dir, sqs_queue_name, max_idle_time,
                 wren_log.addHandler(debug_stream_handler)
                 success = True
             except Exception as e:
-                logger.error('Logging setup error: '+ str(e))
+                logger.error(f'Logging setup error: {str(e)}')
 
 
                 backoff_time *= 2
@@ -381,7 +390,7 @@ def server(aws_region, max_run_time, run_dir, sqs_queue_name, max_idle_time,
     log_setup = Thread(target=async_log_setup)
     log_setup.start()
     pid = os.getpid()
-    run_dir = run_dir + "_" + str(pid)
+    run_dir = f"{run_dir}_{str(pid)}"
 
     #config = pywren.wrenconfig.default()
     server_runner(aws_region, sqs_queue_name,

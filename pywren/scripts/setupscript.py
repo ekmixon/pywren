@@ -40,18 +40,15 @@ def click_validate_prompt(message, default, validate_func,
         res = click.prompt(message, default)
         if validate_func(res):
             return res
-        else:
-            attempt_num += 1
-            if attempt_num >= max_attempts:
-                raise Exception("Too many invalid answers")
-            if fail_msg != "":
-                click.echo(fail_msg.format(res))
+        attempt_num += 1
+        if attempt_num >= max_attempts:
+            raise Exception("Too many invalid answers")
+        if fail_msg != "":
+            click.echo(fail_msg.format(res))
 
 def get_lambda_regions():
     s = boto3.session.Session()
-    regions = s.get_available_regions("lambda")
-
-    return regions
+    return s.get_available_regions("lambda")
 
 def check_aws_region_valid(aws_region_str):
     return aws_region_str in get_lambda_regions()
@@ -59,7 +56,10 @@ def check_aws_region_valid(aws_region_str):
 def check_overwrite_function(filename):
     filename = os.path.expanduser(filename)
     if os.path.exists(filename):
-        return click.confirm("{} already exists, would you like to overwrite?".format(filename))
+        return click.confirm(
+            f"{filename} already exists, would you like to overwrite?"
+        )
+
     return True
 
 def check_bucket_exists(s3bucket):
@@ -83,9 +83,7 @@ def check_bucket_exists(s3bucket):
     return exists
 
 def create_unique_bucket_name():
-    bucket_name = "{}-pywren-{}".format(get_username().lower(),
-                                        random.randint(0, 999))
-    return bucket_name
+    return f"{get_username().lower()}-pywren-{random.randint(0, 999)}"
 
 def check_valid_bucket_name(bucket_name):
     # Validates bucketname
@@ -93,9 +91,7 @@ def check_valid_bucket_name(bucket_name):
     # https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
     bucket_regex = re.compile(r"""^([a-z]|(\d(?!\d{0,2}\.\d{1,3}\.\d{1,3}\.\d{1,3})))
                                    ([a-z\d]|(\.(?!(\.|-)))|(-(?!\.))){1,61}[a-z\d\.]$""", re.X)
-    if re.match(bucket_regex, bucket_name):
-        return True
-    return False
+    return bool(re.match(bucket_regex, bucket_name))
 
 def validate_s3_prefix(prefix): # pylint: disable=unused-argument
     # FIXME

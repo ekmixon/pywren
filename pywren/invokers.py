@@ -89,9 +89,7 @@ class DummyInvoker(object):
         # FIXME not multithreaded safe
         """
 
-        jobn = len(self.payloads)
-        if MAXJOBS != -1:
-            jobn = MAXJOBS
+        jobn = MAXJOBS if MAXJOBS != -1 else len(self.payloads)
         jobs = self.payloads[:jobn]
 
         local.dummy_handler(jobs, run_dir,

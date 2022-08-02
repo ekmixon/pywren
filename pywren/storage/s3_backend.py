@@ -49,8 +49,7 @@ class S3Backend(object):
         """
         try:
             r = self.s3client.get_object(Bucket=self.s3_bucket, Key=key)
-            data = r['Body'].read()
-            return data
+            return r['Body'].read()
         except botocore.exceptions.ClientError as e:
             if e.response['Error']['Code'] == "NoSuchKey":
                 raise StorageNoSuchKeyError(key)
@@ -88,7 +87,5 @@ class S3Backend(object):
         key_list = []
         for page in page_iterator:
             if 'Contents' in page:
-                for item in page['Contents']:
-                    key_list.append(item['Key'])
-
+                key_list.extend(item['Key'] for item in page['Contents'])
         return key_list

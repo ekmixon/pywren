@@ -34,7 +34,7 @@ def get_runtime_info(runtime_config):
 
 
 def version_str(version_info):
-    return "{}.{}".format(version_info[0], version_info[1])
+    return f"{version_info[0]}.{version_info[1]}"
 
 
 def runtime_valid(runtime_meta):
